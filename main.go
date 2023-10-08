@@ -15,7 +15,7 @@ func main() {
 	const basePath = "https://csunibo.github.io/"
 
 	handler := &webdav.Handler{
-		FileSystem: fs.NewStatikFs(basePath + "programmazione/"),
+		FileSystem: fs.NewStatikFS(basePath + "programmazione/"),
 		LockSystem: webdav.NewMemLS(),
 	}
 
