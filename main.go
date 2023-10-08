@@ -62,7 +62,12 @@ func main() {
 		LockSystem: webdav.NewMemLS(),
 	})
 
-	err = http.ListenAndServe(":8080",
+	addr := os.Getenv("ADDR")
+	if addr == "" {
+		addr = "localhost:8080"
+	}
+
+	err = http.ListenAndServe(addr,
 		handlers.CombinedLoggingHandler(os.Stdout, http.DefaultServeMux))
 	if err != nil {
 		slog.Error("error while serving", "err", err)
