@@ -2,17 +2,16 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
-
-	"github.com/rs/zerolog/log"
 )
 
 // Size implements fs.FileInfo for StatikFileInfo
 func (f StatikFileInfo) Size() int64 {
 	size, err := parseSize(f.SizeRaw)
 	if err != nil {
-		log.Err(err).Msg("failed to parse size")
+		slog.Error("failed to parse size", "size", f.SizeRaw, "err", err)
 		return 0
 	}
 	return size
@@ -22,7 +21,7 @@ func (f StatikFileInfo) Size() int64 {
 func (d StatikDirInfo) Size() int64 {
 	size, err := parseSize(d.SizeRaw)
 	if err != nil {
-		log.Err(err).Msg("failed to parse size")
+		slog.Error("failed to parse size", "size", d.SizeRaw, "err", err)
 		return 0
 	}
 	return size
