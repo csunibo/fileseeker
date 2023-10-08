@@ -13,7 +13,7 @@ import (
 // listFS is a webdav.FileSystem that is a list of strings.
 type listFS []string
 
-func (l listFS) Seek(_ int64, _ int) (int64, error)                     { return 0, fs.ErrInvalid }
+func (l listFS) Seek(_ int64, _ int) (int64, error)                     { return 0, fs.ErrPermission }
 func (l listFS) Write(_ []byte) (int, error)                            { return 0, fs.ErrPermission }
 func (l listFS) Mkdir(_ context.Context, _ string, _ os.FileMode) error { return fs.ErrExist }
 func (l listFS) RemoveAll(_ context.Context, _ string) error            { return fs.ErrPermission }
@@ -52,11 +52,11 @@ func (l listFile) ModTime() time.Time                   { return serverStart }
 func (l listFile) IsDir() bool                          { return true }
 func (l listFile) Sys() any                             { return nil }
 func (l listFile) Close() error                         { return nil }
-func (l listFile) Read(_ []byte) (n int, err error)     { return 0, fs.ErrInvalid }
-func (l listFile) Seek(_ int64, _ int) (int64, error)   { return 0, fs.ErrInvalid }
+func (l listFile) Read(_ []byte) (n int, err error)     { return 0, fs.ErrPermission }
+func (l listFile) Seek(_ int64, _ int) (int64, error)   { return 0, fs.ErrPermission }
 func (l listFile) Write(_ []byte) (n int, err error)    { return 0, fs.ErrPermission }
 func (l listFile) Stat() (fs.FileInfo, error)           { return l, nil }
-func (l listFile) Readdir(_ int) ([]fs.FileInfo, error) { return nil, fs.ErrInvalid }
+func (l listFile) Readdir(_ int) ([]fs.FileInfo, error) { return nil, fs.ErrPermission }
 
 // listRoot is a webdav.File that is the root directory of a listFS.
 type listRoot struct {
