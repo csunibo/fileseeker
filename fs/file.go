@@ -1,4 +1,4 @@
-package main
+package fs
 
 import (
 	"bytes"
@@ -11,6 +11,11 @@ import (
 	"golang.org/x/net/webdav"
 )
 
+var (
+	errNotADir    = errors.New("not a directory")
+	errPermission = fs.ErrPermission
+)
+
 type StatikFileInfo struct {
 	NameRaw string    `json:"name"`
 	Path    string    `json:"path"`
@@ -19,11 +24,6 @@ type StatikFileInfo struct {
 	SizeRaw string    `json:"size"`
 	Time    time.Time `json:"time"`
 }
-
-var (
-	errNotADir    = errors.New("not a directory")
-	errPermission = fs.ErrPermission
-)
 
 // fs.FileInfo interface implementation
 
