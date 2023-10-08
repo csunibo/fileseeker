@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -13,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/exp/slog"
 	"golang.org/x/net/webdav"
 )
 

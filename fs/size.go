@@ -2,9 +2,10 @@ package fs
 
 import (
 	"fmt"
-	"log/slog"
 	"strconv"
 	"strings"
+
+	"golang.org/x/exp/slog"
 )
 
 // Size implements fs.FileInfo for StatikFileInfo

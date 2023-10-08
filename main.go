@@ -3,12 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/gorilla/handlers"
+	"golang.org/x/exp/slog"
 	"golang.org/x/net/webdav"
 
 	"github.com/csunibo/fileseeker/fs"
