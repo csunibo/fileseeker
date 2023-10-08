@@ -65,7 +65,7 @@ type listRoot struct {
 }
 
 func (l listRoot) Readdir(count int) ([]fs.FileInfo, error) {
-	if count < 0 || count > len(l.children) {
+	if count <= 0 || count > len(l.children) {
 		count = len(l.children)
 	}
 

@@ -47,6 +47,7 @@ func main() {
 			for _, teaching := range year.Teachings {
 				url := teaching.Url
 				teachings = append(teachings, url)
+				slog.Info("creating handle for url", "url", url)
 				http.Handle("/"+url+"/", &webdav.Handler{
 					Prefix:     "/" + url,
 					FileSystem: fs.NewStatikFS(basePath + url),
@@ -57,6 +58,7 @@ func main() {
 
 	}
 
+	slog.Info("creating handle for /", "url", "/")
 	http.Handle("/", &webdav.Handler{
 		FileSystem: listFS(teachings),
 		LockSystem: webdav.NewMemLS(),
@@ -67,6 +69,7 @@ func main() {
 		addr = "localhost:8080"
 	}
 
+	slog.Info("starting server", "addr", addr)
 	err = http.ListenAndServe(addr,
 		handlers.CombinedLoggingHandler(os.Stdout, http.DefaultServeMux))
 	if err != nil {
