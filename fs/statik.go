@@ -19,9 +19,7 @@ func (s Statik) Close() error                       { return nil }
 func (s Statik) Stat() (iofs.FileInfo, error)       { return s, nil }
 func (s Statik) Readdir(count int) ([]iofs.FileInfo, error) {
 
-	if count > 0 {
-		count = min(count, len(s.Directories)+len(s.Files))
-	} else {
+	if count < 0 || count > len(s.Directories)+len(s.Files) {
 		count = len(s.Directories) + len(s.Files)
 	}
 
