@@ -3,12 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/gorilla/handlers"
-	"golang.org/x/exp/slog"
 	"golang.org/x/net/webdav"
 
 	"github.com/csunibo/fileseeker/fs"
@@ -47,10 +47,18 @@ func main() {
 			for _, teaching := range year.Teachings {
 				url := teaching.Url
 				teachings = append(teachings, url)
+
 				slog.Info("creating handle for url", "url", url)
+
+				statikFS, err := fs.NewStatikFS(basePath + url)
+				if err != nil {
+					slog.Error("error creating statik fs", "err", err, "url", url)
+					os.Exit(1)
+				}
+
 				http.Handle("/"+url+"/", &webdav.Handler{
 					Prefix:     "/" + url,
-					FileSystem: fs.NewStatikFS(basePath + url),
+					FileSystem: statikFS,
 					LockSystem: webdav.NewMemLS(),
 				})
 			}

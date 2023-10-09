@@ -3,24 +3,7 @@ package fs
 import (
 	"io/fs"
 	"time"
-
-	"golang.org/x/net/webdav"
 )
-
-// newInMemFile returns a new inMemFile for the given StatikFileInfo. If the file
-// is a link, a new inMemLinkFile is returned, otherwise a new inMemHttpFile is
-// returned.
-//
-// The scope of this function is to abstract the creation of the inMemFile, so
-// that every StatikFileInfo can be represented by the most appropriate
-// inMemFile.
-func newInMemFile(file StatikFileInfo) (webdav.File, error) {
-	if file.Mime == "text/statik-link" {
-		return newInMemLinkFile(file)
-	} else {
-		return newInMemHttpFile(file)
-	}
-}
 
 type StatikFileInfo struct {
 	NameRaw string    `json:"name"`

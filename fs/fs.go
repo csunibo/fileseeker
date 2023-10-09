@@ -1,20 +1,24 @@
 package fs
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
-	"golang.org/x/exp/slog"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/net/webdav"
+)
+
+const (
+	StatikCachingTime = 5 * time.Minute // how long to cache statik.json files
+	fileCacheSize     = 100             // number of files to cache
 )
 
 var (
@@ -23,91 +27,30 @@ var (
 	errPermission = fs.ErrPermission              // a write operation is performed on a read-only file
 )
 
-var StatikCachingTime = 5 * time.Minute
-
 // StatikFS represents a virtual filesystem that is backed by a statik.json files
 // in a remote server.
-//
-// cache is a map from path to Statik, where path is the path of the directory
-// containing the statik.json file. cacheLock is a RW mutex that protects cache.
-// It is used by GetStatik and cacheStatik.
 type StatikFS struct {
-	baseUrl string
-
-	cache     map[string]statikCache
-	cacheLock sync.RWMutex
+	baseUrl   string                            // base url of the remote server
+	cache     *statikCache                      // cache of statik.json files
+	openFiles *lru.Cache[string, *bytes.Buffer] // cache of open files (to avoid re-fetching them)
 }
 
 // NewStatikFS returns a new StatikFS that is backed by a statik.json file in the
 // remote server at base url.
 //
 // The returned StatikFS is read-only. The returned StatikFS is goroutine-safe.
-func NewStatikFS(base string) *StatikFS {
+func NewStatikFS(base string) (*StatikFS, error) {
+	fileCache, err := lru.New[string, *bytes.Buffer](fileCacheSize)
+	if err != nil {
+		return nil, err
+	}
+	sCache := newStatikCache(base)
+
 	return &StatikFS{
+		openFiles: fileCache,
 		baseUrl:   base,
-		cacheLock: sync.RWMutex{},
-		cache:     map[string]statikCache{},
-	}
-}
-
-// statikCache is a struct that represents a cached statik.json file and its
-// expiration time.
-type statikCache struct {
-	statik Statik
-	exp    time.Time
-}
-
-// GetStatik returns the Statik struct for the statik.json file in the directory
-// specified by path.
-//
-// If the statik.json file is not cached, it is fetched from the remote server,
-// cached and returned.
-//
-// The function is safe for concurrent use, as it uses a RW mutex to protect the
-// cache.
-func (m *StatikFS) GetStatik(path string) (Statik, error) {
-	// check cache
-	m.cacheLock.RLock()
-	cache, contentOk := m.cache[path]
-	m.cacheLock.RUnlock()
-
-	if contentOk && cache.exp.After(time.Now()) {
-		// cache hit
-		return cache.statik, nil
-	}
-
-	if contentOk {
-		// cache expired
-		m.cacheLock.Lock()
-		delete(m.cache, path)
-		m.cacheLock.Unlock()
-	}
-
-	// cache miss
-	slog.Debug("caching statik.json for path", "path", path)
-
-	response, err := http.Get(m.baseUrl + path + "/statik.json")
-	if err != nil {
-		return Statik{}, fmt.Errorf("error getting statik.json: %w", err)
-	}
-
-	statik := Statik{}
-	err = json.NewDecoder(response.Body).Decode(&statik)
-	if err != nil {
-		return Statik{}, fmt.Errorf("error decoding statik.json: %w", err)
-	}
-
-	err = response.Body.Close()
-	if err != nil {
-		return Statik{}, fmt.Errorf("error closing response body: %w", err)
-	}
-
-	// populate cache
-	m.cacheLock.Lock()
-	m.cache[path] = statikCache{statik, time.Now().Add(StatikCachingTime)}
-	m.cacheLock.Unlock()
-
-	return statik, nil
+		cache:     sCache,
+	}, nil
 }
 
 // Mkdir implements webdav.FileSystem for StatikFS.
@@ -136,7 +79,7 @@ func (m *StatikFS) OpenFile(
 	}
 
 	statikPath := path.Dir(name)
-	statik, err := m.GetStatik(statikPath)
+	statik, err := m.cache.Get(statikPath)
 	if err != nil {
 		slog.ErrorContext(ctx, "requested statik.json for a path that doesn't exist",
 			"path", statikPath, "err", err)
@@ -154,7 +97,9 @@ func (m *StatikFS) OpenFile(
 	// we're opening a file
 	for _, file := range statik.Files {
 		if file.Name() == name {
-			return newInMemFile(file)
+
+			populate := m.createFilePopulate(file)
+			return NewLazyMemFile(file, populate), nil
 		}
 	}
 
@@ -169,11 +114,55 @@ func (m *StatikFS) OpenFile(
 	return nil, fs.ErrNotExist
 }
 
+func (m *StatikFS) createFilePopulate(file StatikFileInfo) func() (*bytes.Buffer, error) {
+	return func() (*bytes.Buffer, error) {
+
+		slog.Debug("opening file", "url", file.Url)
+
+		buf, found := m.openFiles.Get(file.Url)
+		if found {
+			// cache hit
+			slog.Debug("cache hit", "url", file.Url)
+			return buf, nil
+		}
+
+		// cache miss
+		slog.Debug("fetching file", "url", file.Url)
+		buf, err := fetchBytes(file)
+		if err != nil {
+			return nil, err
+		}
+		m.openFiles.Add(file.Url, buf) // populate cache
+
+		return buf, nil
+	}
+}
+
+func fetchBytes(i StatikFileInfo) (*bytes.Buffer, error) {
+	resp, err := http.Get(i.Url)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return &buf, nil
+}
+
 // Stat implements webdav.FileSystem for StatikFS.
 func (m *StatikFS) Stat(_ context.Context, name string) (os.FileInfo, error) {
 	statikPath := path.Dir(name)
 
-	statik, err := m.GetStatik(statikPath)
+	statik, err := m.cache.Get(statikPath)
 	if err != nil {
 		return nil, err
 	}

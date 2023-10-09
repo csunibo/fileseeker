@@ -2,10 +2,9 @@ package fs
 
 import (
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
-
-	"golang.org/x/exp/slog"
 )
 
 func parseSizeOrZero(sizeRaw string) int64 {

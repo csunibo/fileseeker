@@ -1,7 +1,7 @@
 package fs
 
 import (
-	iofs "io/fs"
+	"io/fs"
 	"time"
 )
 
@@ -15,14 +15,14 @@ func (s Statik) Write(_ []byte) (n int, err error)  { return 0, errReadOnly } //
 func (s Statik) Seek(_ int64, _ int) (int64, error) { return 0, errReadOnly } // Seek implements fs.File for Statik
 func (s Statik) Read(_ []byte) (_ int, _ error)     { return 0, errReadOnly } // Read implements fs.File for Statik
 func (s Statik) Close() error                       { return nil }            // Close implements fs.File for Statik
-func (s Statik) Stat() (iofs.FileInfo, error)       { return s, nil }         // Stat implements fs.File for Statik
-func (s Statik) Readdir(count int) ([]iofs.FileInfo, error) {
+func (s Statik) Stat() (fs.FileInfo, error)         { return s, nil }         // Stat implements fs.File for Statik
+func (s Statik) Readdir(count int) ([]fs.FileInfo, error) {
 
 	if count <= 0 || count > len(s.Directories)+len(s.Files) {
 		count = len(s.Directories) + len(s.Files)
 	}
 
-	infos := make([]iofs.FileInfo, count)
+	infos := make([]fs.FileInfo, count)
 
 	for i, dir := range s.Directories {
 		if i == count {
@@ -52,9 +52,9 @@ type StatikDirInfo struct {
 	SizeRaw     string    `json:"size"`
 }
 
-func (d StatikDirInfo) Mode() iofs.FileMode { return iofs.ModeDir }               // Mode implements fs.FileInfo for StatikDirInfo
-func (d StatikDirInfo) ModTime() time.Time  { return d.Time }                     // ModTime implements fs.FileInfo for StatikDirInfo
-func (d StatikDirInfo) IsDir() bool         { return true }                       // IsDir implements fs.FileInfo for StatikDirInfo
-func (d StatikDirInfo) Sys() any            { return nil }                        // Sys implements fs.FileInfo for StatikDirInfo
-func (d StatikDirInfo) Name() string        { return d.NameRaw }                  // Name implements fs.FileInfo for StatikDirInfo
-func (d StatikDirInfo) Size() int64         { return parseSizeOrZero(d.SizeRaw) } // Size implements fs.FileInfo for StatikDirInfo
+func (d StatikDirInfo) Mode() fs.FileMode  { return fs.ModeDir }                 // Mode implements fs.FileInfo for StatikDirInfo
+func (d StatikDirInfo) ModTime() time.Time { return d.Time }                     // ModTime implements fs.FileInfo for StatikDirInfo
+func (d StatikDirInfo) IsDir() bool        { return true }                       // IsDir implements fs.FileInfo for StatikDirInfo
+func (d StatikDirInfo) Sys() any           { return nil }                        // Sys implements fs.FileInfo for StatikDirInfo
+func (d StatikDirInfo) Name() string       { return d.NameRaw }                  // Name implements fs.FileInfo for StatikDirInfo
+func (d StatikDirInfo) Size() int64        { return parseSizeOrZero(d.SizeRaw) } // Size implements fs.FileInfo for StatikDirInfo
