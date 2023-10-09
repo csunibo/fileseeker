@@ -69,9 +69,17 @@ func main() {
 		addr = "localhost:8080"
 	}
 
+	slog.Info("creating logging handler")
+	handler := handlers.CombinedLoggingHandler(os.Stdout, http.DefaultServeMux)
+
+	PROXY := os.Getenv("PROXY")
+	if PROXY == "true" {
+		slog.Warn("proxy handling enabled. If you are not behind a proxy, set PROXY=false")
+		handler = handlers.ProxyHeaders(handler)
+	}
+
 	slog.Info("starting server", "addr", addr)
-	err = http.ListenAndServe(addr,
-		handlers.CombinedLoggingHandler(os.Stdout, http.DefaultServeMux))
+	err = http.ListenAndServe(addr, handler)
 	if err != nil {
 		slog.Error("error while serving", "err", err)
 		os.Exit(1)
