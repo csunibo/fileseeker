@@ -8,21 +8,10 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-// Size implements fs.FileInfo for StatikFileInfo
-func (f StatikFileInfo) Size() int64 {
-	size, err := parseSize(f.SizeRaw)
+func parseSizeOrZero(sizeRaw string) int64 {
+	size, err := parseSize(sizeRaw)
 	if err != nil {
-		slog.Error("failed to parse size", "size", f.SizeRaw, "err", err)
-		return 0
-	}
-	return size
-}
-
-// Size implements fs.FileInfo for StatikDirInfo and Statik
-func (d StatikDirInfo) Size() int64 {
-	size, err := parseSize(d.SizeRaw)
-	if err != nil {
-		slog.Error("failed to parse size", "size", d.SizeRaw, "err", err)
+		slog.Error("failed to parse size", "size", sizeRaw, "err", err)
 		return 0
 	}
 	return size

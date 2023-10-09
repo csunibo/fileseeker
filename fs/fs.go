@@ -3,6 +3,7 @@ package fs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -14,6 +15,12 @@ import (
 
 	"golang.org/x/exp/slog"
 	"golang.org/x/net/webdav"
+)
+
+var (
+	errNotADir    = errors.New("not a directory") // a directory operation is performed on a file
+	errReadOnly   = errors.New("read only")       // a write operation is performed on a read-only file
+	errPermission = fs.ErrPermission              // a write operation is performed on a read-only file
 )
 
 var StatikCachingTime = 5 * time.Minute
