@@ -11,11 +11,11 @@ type Statik struct {
 	Files       []StatikFileInfo `json:"files"`
 }
 
-func (s Statik) Write(_ []byte) (n int, err error)  { return 0, errReadOnly } // Write implements fs.File for Statik
-func (s Statik) Seek(_ int64, _ int) (int64, error) { return 0, errReadOnly } // Seek implements fs.File for Statik
-func (s Statik) Read(_ []byte) (_ int, _ error)     { return 0, errReadOnly } // Read implements fs.File for Statik
-func (s Statik) Close() error                       { return nil }            // Close implements fs.File for Statik
-func (s Statik) Stat() (fs.FileInfo, error)         { return s, nil }         // Stat implements fs.File for Statik
+func (s Statik) Write([]byte) (int, error)      { return 0, errReadOnly } // Write implements fs.File for Statik
+func (s Statik) Seek(int64, int) (int64, error) { return 0, errReadOnly } // Seek implements fs.File for Statik
+func (s Statik) Read([]byte) (int, error)       { return 0, errReadOnly } // Read implements fs.File for Statik
+func (s Statik) Close() error                   { return nil }            // Close implements fs.File for Statik
+func (s Statik) Stat() (fs.FileInfo, error)     { return s, nil }         // Stat implements fs.File for Statik
 func (s Statik) Readdir(count int) ([]fs.FileInfo, error) {
 
 	if count <= 0 || count > len(s.Directories)+len(s.Files) {
