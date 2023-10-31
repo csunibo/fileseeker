@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/webdav"
 
 	"github.com/csunibo/fileseeker/fs"
+	"github.com/csunibo/fileseeker/listfs"
 )
 
 type configType []struct {
@@ -68,7 +69,7 @@ func main() {
 
 	slog.Info("creating handle for /", "url", "/")
 	http.Handle("/", &webdav.Handler{
-		FileSystem: listFS(teachings),
+		FileSystem: listfs.NewListFS(teachings),
 		LockSystem: webdav.NewMemLS(),
 	})
 
