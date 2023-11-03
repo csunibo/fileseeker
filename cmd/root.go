@@ -69,7 +69,7 @@ func init() {
 func Execute(*cobra.Command, []string) {
 
 	if humanReadable && logJournald {
-		log.Fatal().Msg("human readable and logJournald output are incompatible")
+		log.Fatal().Msg("--human and --journald are incompatible")
 	} else if humanReadable {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
 	} else if logJournald {
