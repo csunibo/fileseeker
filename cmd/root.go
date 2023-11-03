@@ -8,6 +8,7 @@ import (
 
 	gorillahandlers "github.com/gorilla/handlers"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/journald"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -48,6 +49,7 @@ var (
 	proxyEnabled  bool
 	humanReadable bool
 	debug         bool
+	logJournald   bool
 )
 
 func init() {
@@ -58,6 +60,7 @@ func init() {
 	RootCmd.Flags().BoolVar(&proxyEnabled, "proxy", false, "enable proxy handling")
 	RootCmd.Flags().BoolVar(&humanReadable, "human", false, "enable human readable output")
 	RootCmd.Flags().BoolVarP(&debug, "debug", "d", false, "enable debug output")
+	RootCmd.Flags().BoolVar(&logJournald, "journald", false, "enable logJournald output")
 
 	RootCmd.Flags().StringVarP(&basePath, "basepath", "b", "", "base path for the static files")
 	_ = RootCmd.MarkFlagRequired("basepath")
@@ -65,8 +68,12 @@ func init() {
 
 func Execute(*cobra.Command, []string) {
 
-	if humanReadable {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	if humanReadable && logJournald {
+		log.Fatal().Msg("human readable and logJournald output are incompatible")
+	} else if humanReadable {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
+	} else if logJournald {
+		log.Logger = log.Output(journald.NewJournalDWriter())
 	}
 
 	if debug {
