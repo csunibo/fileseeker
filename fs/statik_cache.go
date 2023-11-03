@@ -1,12 +1,14 @@
 package fs
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-	"net/http"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // statikCache is a struct that represents a cache of statik.json files.
@@ -37,37 +39,44 @@ type statikCacheEl struct {
 //
 // The function is safe for concurrent use, as it uses a RW mutex to protect the
 // cache.
-func (m *statikCache) Get(path string) (Statik, error) {
+func (m *statikCache) Get(ctx context.Context, path string) (Statik, error) {
+	ctx, span := tr.Start(ctx, "statik-cache.Get")
+	span.SetAttributes(attribute.String("path", path))
+	defer span.End()
+
 	// check cache
 	m.cacheLock.RLock()
 	cache, contentOk := m.cache[path]
 	m.cacheLock.RUnlock()
 
 	if contentOk && cache.exp.After(time.Now()) {
-		// cache hit
-		return cache.statik, nil
-	}
+		span.AddEvent("cache hit")
 
-	if contentOk {
-		// cache expired
+		return cache.statik, nil
+	} else if contentOk {
+		span.AddEvent("cache expired")
+
 		m.cacheLock.Lock()
 		delete(m.cache, path)
 		m.cacheLock.Unlock()
 	}
 
 	// cache miss
-	slog.Debug("caching statik.json for path", "path", path)
+	log.Debug().Str("path", path).Msg("statik cache miss")
+	span.AddEvent("cache miss")
 
-	response, err := http.Get(m.baseUrl + path + "/statik.json")
+	response, err := httpGet(ctx, m.baseUrl+path+"/statik.json")
 	if err != nil {
 		return Statik{}, fmt.Errorf("error getting statik.json: %w", err)
 	}
+	span.AddEvent("statik.json fetched")
 
-	statik := Statik{}
+	var statik Statik
 	err = json.NewDecoder(response.Body).Decode(&statik)
 	if err != nil {
 		return Statik{}, fmt.Errorf("error decoding statik.json: %w", err)
 	}
+	span.AddEvent("statik.json decoded")
 
 	err = response.Body.Close()
 	if err != nil {
@@ -78,6 +87,7 @@ func (m *statikCache) Get(path string) (Statik, error) {
 	m.cacheLock.Lock()
 	m.cache[path] = statikCacheEl{statik, time.Now().Add(StatikCachingTime)}
 	m.cacheLock.Unlock()
+	span.AddEvent("statik.json cached")
 
 	return statik, nil
 }

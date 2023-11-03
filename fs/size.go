@@ -2,15 +2,16 @@ package fs
 
 import (
 	"fmt"
-	"log/slog"
 	"strconv"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 func parseSizeOrZero(sizeRaw string) int64 {
 	size, err := parseSize(sizeRaw)
 	if err != nil {
-		slog.Error("failed to parse size", "size", sizeRaw, "err", err)
+		log.Error().Str("size", sizeRaw).Err(err).Msg("failed to parse size")
 		return 0
 	}
 	return size

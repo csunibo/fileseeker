@@ -6,46 +6,46 @@ import (
 )
 
 type LazyMemFile struct {
-	r *bytes.Reader
-	i StatikFileInfo
-	p func() (*bytes.Buffer, error)
+	reader   *bytes.Reader
+	info     StatikFileInfo
+	populate func() (*bytes.Buffer, error)
 }
 
 func NewLazyMemFile(info StatikFileInfo, populate func() (*bytes.Buffer, error)) *LazyMemFile {
-	return &LazyMemFile{p: populate, i: info}
+	return &LazyMemFile{populate: populate, info: info}
 }
 
-func (m *LazyMemFile) Close() error                         { return nil }
-func (m *LazyMemFile) Readdir(_ int) ([]fs.FileInfo, error) { return nil, errNotADir }
-func (m *LazyMemFile) Stat() (fs.FileInfo, error)           { return m.i, nil }
-func (m *LazyMemFile) Write(_ []byte) (n int, err error)    { return 0, errReadOnly }
+func (m *LazyMemFile) Close() error                       { return nil }
+func (m *LazyMemFile) Readdir(int) ([]fs.FileInfo, error) { return nil, errNotADir }
+func (m *LazyMemFile) Stat() (fs.FileInfo, error)         { return m.info, nil }
+func (m *LazyMemFile) Write([]byte) (int, error)          { return 0, errReadOnly }
 func (m *LazyMemFile) Read(p []byte) (int, error) {
-	if m.r == nil {
+	if m.reader == nil {
 		err := m.load()
 		if err != nil {
 			return 0, err
 		}
 	}
 
-	return m.r.Read(p)
+	return m.reader.Read(p)
 }
 func (m *LazyMemFile) Seek(offset int64, whence int) (int64, error) {
-	if m.r == nil {
+	if m.reader == nil {
 		err := m.load()
 		if err != nil {
 			return 0, err
 		}
 	}
 
-	return m.r.Seek(offset, whence)
+	return m.reader.Seek(offset, whence)
 }
 
 func (m *LazyMemFile) load() error {
-	buf, err := m.p()
+	buf, err := m.populate()
 	if err != nil {
 		return err
 	}
 
-	m.r = bytes.NewReader(buf.Bytes())
+	m.reader = bytes.NewReader(buf.Bytes())
 	return nil
 }

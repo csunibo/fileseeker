@@ -5,14 +5,16 @@ import (
 	"context"
 	"errors"
 	"io/fs"
-	"log/slog"
-	"net/http"
 	"os"
 	"path"
 	"strings"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"golang.org/x/net/webdav"
 )
 
@@ -25,6 +27,8 @@ var (
 	errNotADir    = errors.New("not a directory") // a directory operation is performed on a file
 	errReadOnly   = errors.New("read only")       // a write operation is performed on a read-only file
 	errPermission = fs.ErrPermission              // a write operation is performed on a read-only file
+
+	tr = otel.Tracer("fs")
 )
 
 // StatikFS represents a virtual filesystem that is backed by a statik.json files
@@ -54,16 +58,16 @@ func NewStatikFS(base string) (*StatikFS, error) {
 }
 
 // Mkdir implements webdav.FileSystem for StatikFS.
-func (m *StatikFS) Mkdir(_ context.Context, _ string, _ os.FileMode) error {
+func (m *StatikFS) Mkdir(context.Context, string, os.FileMode) error {
 	// If fs.ErrPermission is used, gvfs retries the operation forever
 	return fs.ErrNotExist
 }
 
 // RemoveAll implements webdav.FileSystem for StatikFS.
-func (m *StatikFS) RemoveAll(_ context.Context, _ string) error { return errPermission }
+func (m *StatikFS) RemoveAll(context.Context, string) error { return errPermission }
 
 // Rename implements webdav.FileSystem for StatikFS.
-func (m *StatikFS) Rename(_ context.Context, _, _ string) error { return errPermission }
+func (m *StatikFS) Rename(context.Context, string, string) error { return errPermission }
 
 // OpenFile implements webdav.FileSystem for StatikFS.
 func (m *StatikFS) OpenFile(
@@ -72,6 +76,12 @@ func (m *StatikFS) OpenFile(
 	flag int,
 	perm os.FileMode,
 ) (webdav.File, error) {
+	ctx, span := tr.Start(ctx, "OpenFile")
+	span.SetAttributes(
+		attribute.String("name", name),
+		attribute.Int("flag", flag),
+	)
+	defer span.End()
 
 	// only allow read-only access
 	if flag != os.O_RDONLY {
@@ -79,12 +89,15 @@ func (m *StatikFS) OpenFile(
 	}
 
 	statikPath := path.Dir(name)
-	statik, err := m.cache.Get(statikPath)
+
+	ctx, statikSpan := tr.Start(ctx, "GetStatik")
+	statik, err := m.cache.Get(ctx, statikPath)
 	if err != nil {
-		slog.ErrorContext(ctx, "requested statik.json for a path that doesn't exist",
-			"path", statikPath, "err", err)
+		statikSpan.RecordError(err)
+		statikSpan.SetStatus(codes.Error, "requested statik.json for a path that doesn't exist")
 		return nil, fs.ErrNotExist
 	}
+	statikSpan.End()
 
 	if strings.HasSuffix(name, "/") {
 		// we're opening a dir
@@ -97,15 +110,15 @@ func (m *StatikFS) OpenFile(
 	// we're opening a file
 	for _, file := range statik.Files {
 		if file.Name() == name {
-
-			populate := m.createFilePopulate(file)
-			return NewLazyMemFile(file, populate), nil
+			span.AddEvent("file found")
+			return m.getFile(file), nil
 		}
 	}
 
 	// we're opening a dir (??)
 	for _, dir := range statik.Directories {
 		if dir.Name() == name {
+			span.AddEvent("dir found")
 			redir := statikPath + "/" + name + "/"
 			return m.OpenFile(ctx, redir, flag, perm)
 		}
@@ -114,20 +127,34 @@ func (m *StatikFS) OpenFile(
 	return nil, fs.ErrNotExist
 }
 
+func (m *StatikFS) getFile(file StatikFileInfo) webdav.File {
+
+	if file.Mime == "text/statik-link" {
+		return NewLinkFile(file)
+	}
+
+	populate := m.createFilePopulate(file)
+	return NewLazyMemFile(file, populate)
+}
+
 func (m *StatikFS) createFilePopulate(file StatikFileInfo) func() (*bytes.Buffer, error) {
 	return func() (*bytes.Buffer, error) {
 
-		slog.Debug("opening file", "url", file.Url)
+		if file.Mime == "text/statik-link" {
+			return bytes.NewBufferString(file.Url), nil
+		}
+
+		log.Debug().Str("url", file.Url).Msg("opening file")
 
 		buf, found := m.openFiles.Get(file.Url)
 		if found {
 			// cache hit
-			slog.Debug("cache hit", "url", file.Url)
+			log.Debug().Str("url", file.Url).Msg("cache hit")
 			return buf, nil
 		}
 
 		// cache miss
-		slog.Debug("fetching file", "url", file.Url)
+		log.Debug().Str("url", file.Url).Msg("cache miss")
 		buf, err := fetchBytes(file)
 		if err != nil {
 			return nil, err
@@ -139,7 +166,7 @@ func (m *StatikFS) createFilePopulate(file StatikFileInfo) func() (*bytes.Buffer
 }
 
 func fetchBytes(i StatikFileInfo) (*bytes.Buffer, error) {
-	resp, err := http.Get(i.Url)
+	resp, err := httpGet(context.Background(), i.Url)
 	if err != nil {
 		return nil, err
 	}
@@ -159,10 +186,10 @@ func fetchBytes(i StatikFileInfo) (*bytes.Buffer, error) {
 }
 
 // Stat implements webdav.FileSystem for StatikFS.
-func (m *StatikFS) Stat(_ context.Context, name string) (os.FileInfo, error) {
+func (m *StatikFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	statikPath := path.Dir(name)
 
-	statik, err := m.cache.Get(statikPath)
+	statik, err := m.cache.Get(ctx, statikPath)
 	if err != nil {
 		return nil, err
 	}
