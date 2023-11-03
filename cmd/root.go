@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 
@@ -84,14 +83,12 @@ func Execute(*cobra.Command, []string) {
 	var config configType
 	configStr, err := os.ReadFile(configFile)
 	if err != nil {
-		fmt.Println("Error reading config file:", err)
-		os.Exit(1)
+		log.Fatal().Err(err).Str("file", configFile).Msg("error reading config file")
 	}
 
 	err = json.Unmarshal(configStr, &config)
 	if err != nil {
-		fmt.Println("Error parsing config file:", err)
-		os.Exit(1)
+		log.Fatal().Err(err).Str("file", configFile).Msg("error parsing config file")
 	}
 
 	// Setup telemetry
@@ -101,8 +98,7 @@ func Execute(*cobra.Command, []string) {
 			serviceName, serviceVer,
 			grpcEndpoint, grpcSecure)
 		if err != nil {
-			log.Error().Err(err).Msg("error while setting up telemetry")
-			os.Exit(1)
+			log.Fatal().Err(err).Msg("error while setting up telemetry")
 		}
 
 		defer func() {
@@ -147,16 +143,14 @@ func Execute(*cobra.Command, []string) {
 	log.Info().Str("addr", addr).Msg("starting server")
 	err = http.ListenAndServe(addr, handler)
 	if err != nil {
-		log.Error().Err(err).Msg("error while serving")
-		os.Exit(1)
+		log.Fatal().Err(err).Msg("error while serving")
 	}
 }
 
 func handleTeaching(mux *http.ServeMux, url string, logger func(req *http.Request, err error)) {
 	statikFS, err := fs.NewStatikFS(basePath + url)
 	if err != nil {
-		log.Error().Err(err).Str("url", url).Msg("error creating statik fs")
-		os.Exit(1)
+		log.Fatal().Err(err).Str("url", url).Msg("error creating statik fs")
 	}
 
 	handler := &webdav.Handler{

@@ -1,15 +1,13 @@
 package main
 
 import (
-	"fmt"
-	"os"
+	"github.com/rs/zerolog/log"
 
 	"github.com/csunibo/fileseeker/cmd"
 )
 
 func main() {
 	if err := cmd.RootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		log.Fatal().Err(err).Msg("error executing root command")
 	}
 }
