@@ -40,7 +40,8 @@ type statikFile struct {
 }
 
 var (
-	dataDir = flag.String("d", "data", "data directory")
+	dataDir    = flag.String("d", "data", "data directory")
+	configFile = flag.String("c", "config/teachings.json", "config file")
 )
 
 func main() {
@@ -49,7 +50,7 @@ func main() {
 	fmt.Println("Starting fileseeker...")
 
 	fmt.Println("Loading teachings...")
-	teachingData, err := loadTeachings("config/teachings.json")
+	teachingData, err := loadTeachings(*configFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load teachings: %v\n", err)
 		os.Exit(1)
@@ -89,7 +90,7 @@ func main() {
 		for _, f := range node.Files {
 			time.Sleep(2 * time.Millisecond)
 
-			url := fmt.Sprintf("%s/%s", statikUrl, f.Path)
+			url := fmt.Sprintf("%s/%s", statikUrl, f.Name)
 
 			path := strings.TrimPrefix(url, rootUrl)
 			path = filepath.Join(*dataDir, path)
