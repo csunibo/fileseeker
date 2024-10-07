@@ -114,9 +114,9 @@ func main() {
 			}
 
 			// write file
-			resp, err := http.Get(f.Url)
+			resp, err := http.Get(url)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to fetch file: %v\n", f.Url)
+				fmt.Fprintf(os.Stderr, "Failed to fetch file: %v\n", url)
 				continue
 			}
 
