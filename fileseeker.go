@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -9,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/charmbracelet/log"
 )
 
 type teachings []struct {
@@ -47,12 +50,13 @@ var (
 func main() {
 	flag.Parse()
 
-	fmt.Println("Starting fileseeker...")
+	log.Info("Starting fileseeker...")
 
-	fmt.Println("Loading teachings...")
+	log.Debug("Loading teachings...")
+
 	teachingData, err := loadTeachings(*configFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to load teachings: %v\n", err)
+		log.Errorf("Failed to load teachings: %v", err)
 		os.Exit(1)
 	}
 
@@ -65,7 +69,7 @@ func main() {
 		url := fmt.Sprintf("%s/%s", rootUrl, teaching.Url)
 		urlQueue = append(urlQueue, url)
 	}
-	fmt.Println("Enqueued teachings", len(urlQueue))
+	log.Debug("Enqueued teachings", "len", len(urlQueue))
 
 	// walk the tree
 
@@ -76,7 +80,7 @@ func main() {
 		// get statik.json
 		node, err := getStatik(fmt.Sprintf("%s/statik.json", statikUrl))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to get statik.json: %v\n", err)
+			log.Errorf("Failed to get statik.json: %v", err)
 			continue
 		}
 
@@ -95,45 +99,78 @@ func main() {
 			path := strings.TrimPrefix(url, rootUrl)
 			path = filepath.Join(*dataDir, path)
 
-			fmt.Println("Downloading", url, "to", path)
+			pathLogger := log.With("path", path)
+
+			pathLogger.Debug("Downloading", "url", url)
 
 			// create folder if not exists
-			dir := filepath.Dir(path)
-			if _, err := os.Stat(dir); os.IsNotExist(err) {
-				if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to create directory: %v\n", dir)
-					continue
-				}
-			}
-
-			// create file
-			fp, err := os.Create(path)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to create file: %v\n", path)
-				continue
-			}
-
 			// write file
-			resp, err := http.Get(url)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to fetch file: %v\n", url)
-				continue
-			}
+			// if file exists, check if remote file is newer
+			// create file
+			err := downloadStatikFile(path, url, f.Time)
 
-			_, err = fp.ReadFrom(resp.Body)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to write file: %v\n", path)
-				continue
-			}
-
-			err = fp.Close()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to close file: %v\n", path)
-				continue
+			if err == upToDate {
+				pathLogger.Info("Up to date")
+			} else if err != nil {
+				pathLogger.Info("Failed", "err", err)
+			} else {
+				pathLogger.Info("Downloaded")
 			}
 		}
 	}
+}
 
+var upToDate = errors.New("up to date")
+
+func downloadStatikFile(localPath string, url string, lastModified time.Time) error {
+
+	// if file already exists, check if remote file is newer. if not, return
+	stat, err := os.Stat(localPath)
+	if err == nil {
+		localModTime := stat.ModTime()
+
+		if lastModified.Before(localModTime) {
+			return upToDate
+		}
+	}
+
+	// create directory if not exists
+	dir := filepath.Dir(localPath)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+		}
+	}
+
+	// download file
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to fetch %s: %w", url, err)
+	}
+
+	rBody := resp.Body
+
+	fp, err := os.Create(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to create file %s: %w", localPath, err)
+	}
+
+	_, err = fp.ReadFrom(rBody)
+	if err != nil {
+		return fmt.Errorf("failed to write file %s: %w", localPath, err)
+	}
+
+	err = fp.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close file %s: %w", localPath, err)
+	}
+
+	err = rBody.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close response body: %w", err)
+	}
+
+	return nil
 }
 
 func loadTeachings(teachingsFile string) (teachings, error) {
